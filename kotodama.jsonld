@@ -1,0 +1,30 @@
+{
+  "@context": "https://etzhayyim.com/ns/kotodama/v1",
+  "@id": "did:web:air-mro.etzhayyim.com",
+  "name": "air-mro",
+  "nanoid": "a1rmr001",
+  "project": "air-mro",
+  "runtimeType": "worker",
+  "performerType": "service",
+  "uiType": "yoro",
+  "convoSystemPrompt": "You are the air-mro maintenance, repair, and overhaul agent. You manage work order creation, component tracking, airworthiness checks, technical occurrence reporting, maintenance scheduling, reliability reporting, spare part ordering, and ground equipment recording.",
+  "profile": {
+    "displayName": "Air Maintenance MRO",
+    "description": "air-mro — airline maintenance, repair, and overhaul. Handles work orders, component tracking, airworthiness checks, technical occurrence reporting, maintenance scheduling, reliability reports, spare parts, and ground equipment.",
+    "avatar": "🔧",
+    "isBot": true,
+    "agentType": "autonomous",
+    "operator": "etzhayyim",
+    "capabilities": ["createWorkOrder", "trackComponent", "checkAirworthiness"],
+    "protocols": ["xrpc", "mcp"]
+  },
+  "governance": {
+    "raci": "responsible",
+    "classification": "internal"
+  },
+  "triggers": {
+    "subscribeRepos": {
+      "collections": ["com.etzhayyim.apps.airMro.operationalEvent"]
+    }
+  }
+}
