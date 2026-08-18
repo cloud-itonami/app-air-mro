@@ -1,16 +1,21 @@
 {
+  // main points at the shadow-cljs :esm bundle built from src/air_mro/*.
+  // Before the ClojureScript migration (docs/adr/0001) it pointed at
+  // "svelte/.svelte-kit/cloudflare/_worker.js" -- a SvelteKit build output that
+  // was NOT in the tree -- while src/app.ts, the file a reader would open, was
+  // in no bundle at all. scripts/verify-docs-claims.cljs checks that this value,
+  // shadow-cljs.edn's :output-dir and its exported namespace still agree.
   "name": "kotodama-a1rmr001",
-  "main": "svelte/.svelte-kit/cloudflare/_worker.js",
+  "main": "dist/worker.js",
   "compatibility_date": "2025-03-17",
-  "compatibility_flags": [
-    "nodejs_compat",
-    "nodejs_als"
-  ],
+  // nodejs_compat / nodejs_als were required by SvelteKit's adapter-cloudflare.
+  // Removed after checking the bundle still serves every route under workerd
+  // (`wrangler dev --local`), not by assuming -- see docs/operator-quickstart.md S6.
   "vars": {
     "APP_CAPABILITIES": "[\"createWorkOrder\",\"trackComponent\",\"checkAirworthiness\"]",
     "APP_DESCRIPTION": "air-mro — airline maintenance, repair, and overhaul. Handles work orders, component tracking, airworthiness checks, technical occurrence reporting, maintenance scheduling, reliability reports, spare parts, and ground equipment.",
     "APP_DISPLAY_NAME": "Air Maintenance MRO",
-    "APP_FRAMEWORK": "sveltekit-edge-bff",
+    "APP_FRAMEWORK": "cljs-worker",
     "APP_NANOID": "a1rmr001",
     "APP_PERFORMER_TYPE": "service",
     "APP_UI_TYPE": "yoro",
@@ -33,11 +38,8 @@
       "pattern": "air-mro.etzhayyim.com/*",
       "zone_name": "etzhayyim.com"
     }
-  ],
-  "assets": {
-    "directory": "./svelte/.svelte-kit/cloudflare/client",
-    "binding": "ASSETS",
-    "html_handling": "auto-trailing-slash",
-    "not_found_handling": "none"
-  }
+  ]
+  // The "assets" block was removed with the Svelte tree: it bound ASSETS to
+  // ./svelte/.svelte-kit/cloudflare/client, a directory that no longer exists
+  // (and never existed in the tree). The Worker serves its own page.
 }
