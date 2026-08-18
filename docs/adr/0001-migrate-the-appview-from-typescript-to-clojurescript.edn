@@ -1,0 +1,219 @@
+[{:db/id -1
+  :adr/id "app-air-mro-0001"
+  :adr/title "appview を TypeScript/Svelte から ClojureScript へ移す"
+  :adr/status "accepted"
+  :adr/date "2026-08-18"
+  :adr/doc_type "adr"
+  :adr/source-format "edn"
+  :adr/body "
+# ADR-0001: appview を TypeScript/Svelte から ClojureScript へ移す
+
+**Status**: accepted / **Date**: 2026-08-18 / **Deciders**: Jun Kawasaki
+
+## Context
+
+この repository は etzhayyim/root の 60-apps/etzhayyim-project-air-mro から
+抽出された appview である（migration.edn）。移行前の状態を測って、3 つの
+欠陥が確認できた。
+
+### 測定（2026-08-18、tree 701d16c、23 tracked files / 72,630 bytes）
+
+**(1) deploy される handler と、読み手が開くファイルが別。**
+wrangler.jsonc の main は `svelte/.svelte-kit/cloudflare/_worker.js` ——
+SvelteKit のビルド出力で、**tree に存在しない**（`ls svelte/.svelte-kit` →
+No such file or directory）。一方この repo で最もアプリケーションらしい
+`src/app.ts`（3,088 バイト、8 methods の一覧をヘッダに持ち /health と
+/_app/meta を serve する）は**どの bundle にも入っていない**。参照している
+ものも無い（grep で当たるのは docs の散文だけ）。root の package.json は
+`tsc --noEmit` を宣言するが root tsconfig.json が無く、実行もできない。
+
+**(2) 公開ページが隣の設定と矛盾する。**
+`svelte/src/routes/+page.svelte` は生成された summary object を literal で
+持っており、`\"routeCount\": 0` / `\"routes\": []` / `\"vars\": []` と表示する。
+同じディレクトリの wrangler.jsonc は route 2 パターンと var 8 個を宣言して
+いる。`relativePath` も抽出元のモノレポのパスを指したままだった。
+
+**(3) 実際に deploy されていた handler は operation を 1 つも名指ししない。**
+`svelte/src/routes/xrpc/[...path]/+server.ts` は rest parameter で受けた NSID を
+そのまま MCP router へ tools/call として転送する。`grep -c airMro` → 0。
+
+## Decision
+
+**appview を ClojureScript に移し、その TypeScript と Svelte を撤去する。**
+
+    src/air_mro/route.cljc    判断（どの handler が答えるか）
+    src/air_mro/view.cljc     ページ（jp-go-dds の hiccup）
+    src/air_mro/worker.cljs   Request/Response に触る唯一の層
+            ↓ shadow-cljs :target :esm
+    dist/worker.js            wrangler.jsonc の main が指すもの
+
+この workspace の正本言語は cljs と kotoba であって TypeScript ではない
+（superproject CLAUDE.md の runtime 順序: kotoba wasm > clojurewasm >
+ClojureScript > nbb）。入口を .kotoba ではなく cljs に置くのは ADR-2606290000
+の判断で、kotoba の ingress capability が :native-aot / :wasm-aot とも
+pending だからである。判断を .cljc に切り出してあるのは、ブラウザもビルドも
+無しにテストするためであり、ingress が qualify した時に最初に .kotoba へ
+移る部分だからでもある。先例は同じ org の cloud-itonami/app-ongakuka と
+cloud-itonami-marketplace-listing。
+
+### これで消えた欠陥
+
+- (1) は構造的に消えた。main が指す bundle は src/ からコンパイルされる。
+  検証器が shadow の :output-dir と wrangler の main と export の ns 名の
+  3 つが噛み合っていることを検査する。
+- (2) も構造的に消えた。ページは route 表（air-mro.route/routes）を引数で
+  受け取って描く。表示と実際に答えるものが同じ 1 つの値から出るので、
+  ずれる余地が無い。テストは route 表を差し替えるとページも変わることを
+  固定している（固定値を焼いたら赤くなる）。
+- (3) は消していない —— **これは欠陥ではなく設計である。** この Worker は
+  BFF で、operation の一覧は上流の MCP router にある。移行後も名指ししない。
+  ページはその事実を明記する。
+
+## 持ち越さなかった経路（黙って消していない）
+
+`src/app.ts` にあってどこにも deploy されていなかったもののうち、次は
+**意図的に移していない**:
+
+- **dispatcher への proxy**（`/xrpc/com.etzhayyim.apps.airMro.*` を
+  `dispatcher.etzhayyim.com` へ POST）。宛先が NXDOMAIN で、必要な binding
+  （DISPATCHER_URL / DISPATCHER_INTERNAL_SECRET）は wrangler.jsonc に
+  **1 つも宣言されていない**。
+- **`/_app/meta`**。`/health` と同一の JSON を返すだけの重複で、しかも
+  SvelteKit 内部パスに見える名前である。/health は移した。
+
+動かない経路を移植して『移行済み』と言わないためである。必要になった時点で
+route.cljc に足し、テストと binding を伴って戻す。
+
+## 触っていないもの — kotoba/ は appview ではない
+
+`kotoba/`（TypeScript 5 ファイル、registry.ts 434 行 + types.ts 406 行 +
+12 tests）は**残した**。測定に基づく:
+
+- どの bundle にも入っていない（main は svelte のビルド出力を指していた）
+- appview から参照されていない。逆に kotoba から appview への参照も無い
+  （import は @etzhayyim/sdk / sdk-mock / 自分の相対パスだけ）
+- pin された 2 つの git 依存は**実在する**。`git fetch <url> <sha>` で
+  どちらも type=commit として取得できた
+  （12314a0c… = com-etzhayyim-sdk、c857ff9b… = com-etzhayyim-sdk-mock）
+
+『TypeScript を全部消す』というテンプレート的な読み方でこれを消すのは
+移行ではなく破壊である。README に測定つきで記載し、検証器はこの 5 本の
+`.ts` の**本数と各パスの存在**を pin しているので、黙って増えることも
+消えることもできない。移すなら別の決定で、依存先の cljs face が要る。
+
+なお `npm install` は npm 11.16 の EALLOWSCRIPTS で通らない（git 依存の
+nested install が拒否される）。これは**依存が無い**のではなく**手元の
+npm が入れられない**であって、両者を混ぜない。テストは走らせていない。
+
+### UI
+
+基盤は jp-go-digital-design-system（skill kotoba-uiux が定める新規 UI の
+base）。色・寸法は --hig-* トークン契約のみ、app 固有 CSS は 3 行、raw hex
+と px フォントサイズは無い。CSS は shadow.resource/inline で bundle に焼く
+（design system の外部リクエストゼロ方針）。
+
+## 検証（この ADR を書いた時点で実際に通したもの）
+
+- **air-mro.route-test**: 6 tests / 25 assertions、0 failures（nbb、ビルド不要）
+- **ページ描画 → design-quality**: 100.00 / 100（gate 95）。`--extra-axes` を
+  付けた 12 軸でも 100.00
+- **bundle をビルドして実際に叩いた**: `shadow-cljs release worker` が
+  55 files / 12 compiled / 0 warnings で dist/worker.js（246,499 バイト、
+  sha256 79339f33…）を出し、scripts/smoke-worker.cljs が 20 項目を確認
+- **scripts/verify-docs-claims.cljs**: 全 claim PASS、exit 0
+
+### gate は落ちることを確かめてから受け取った
+
+**ビルドは検査になったか。** `:warnings-as-errors` を
+`:compiler-options` に置いた状態で `route/dispatch` を存在しない
+`route/dispatch-nonexistent` に改名すると、ビルドは **exit 1** で落ち、
+dist/worker.js の sha256 は **1 バイトも動かなかった**（79339f33… のまま）。
+落ちたビルドは出荷しない。
+
+**置き場所そのものを実演した。** 同じ壊れたソースのまま、キーを
+`:build-options` へ移して再ビルドすると **exit 0**（`1 warnings`）で
+**新しい bundle が出た**（sha256 270bb85e…）。その bundle を import すると
+`Cannot read properties of undefined (reading 'h')` を投げる。つまり
+**キーを置き間違えた `:warnings-as-errors` は、落ちようのない検査**である
+—— この option が防ぐはずの失敗そのものになる。検証器はこの配置を
+**EDN として parse して**検査する（grep ではこの段落自身に当たってしまう）。
+
+**design system の検査は 2 本要る。** 実測（このページ）:
+
+    探す文字列                    CSS 込み   CSS 無し
+    dads-table                      74         6      ← 0 にならない
+    class=\"dads-table\"              1         1      ← markup なので不変
+    --color-primitive-blue          45         0
+
+だから `class=\"dads-table\"`（view がライブラリを呼んだ）と
+`--color-primitive-blue`（stylesheet が実際に入った）を別の検査にした。
+`(rc/inline \"jp_go_dds/dds.css\")` を `\"\"` に替えて**再ビルドし**、
+後者だけが赤くなり前者が緑のままであることを確認した。**逆向きも確認した**
+—— `dds/table` を生の `[:table]` に置き換えると前者だけが赤くなる（こちらは
+source 描画）。2 本は独立に discriminate する。
+
+**design-quality の 100.00 が保証する範囲は狭い。** 同じページを
+design system の CSS 抜きで描画しても **97.22 で gate 95 を PASS する**
+（実測）。CLI 自身が『axes scored: 10 … NOT scored: input-zoom, contrast』
+『A pass says nothing about an axis that was not applied』と出力する。
+『デザインシステムが入っている』と言えるのは smoke の 2 本目だけである。
+
+**値の露出は 2 つの独立した印で見る。** 出てはいけない値（別の var に
+置いた SENTINEL-4d71b8）と、出なければいけない値（中継先 URL、
+.invalid TLD なので実 DNS に依存しない）。片方だけだと『全部隠す』実装も
+『全部出す』実装も通る。3 通りで確かめた:
+
+    A  無改変                          両方 緑
+    B  worker が env の VALUE を渡す    『値を隠す』だけ 赤
+    C  view が中継先の表示をやめる      『中継先を出す』だけ 赤
+
+**ただしこの 3 つは source を描画して確かめたもので、bundle を作り直しての
+確認ではない**（build lock を他セッションが長時間保持していたため。迂回は
+していない）。bundle 側で smoke が落ちることは、上の CSS の mutation で
+確認済みである。
+
+4 つ目として B と C を同時に当てたが、**これは実演として数えない** ——
+leak した値の中に中継先 URL 自身が含まれるので、『中継先を出す』は
+正当に緑のままだった。狙いを外した mutation の緑は実演ではない。
+
+**多段パスは移行前と同じく中継する。** 移行前の SvelteKit route は rest
+parameter `[...path]` で受けており、空文字だけを 400 にして `a/b` はその
+まま tool 名として転送していた。1 セグメントに絞ると挙動が変わる ——
+NSID に `/` は現れないので上流で失敗するだけだが、**それは移行ではなく
+方針変更**である。同型の移行 5 本がすべてこの形に揃っており、こちらも
+合わせた。smoke は単一セグメントと多段が**同じ結末**になることを
+`.invalid` の中継先に対して比べるので、実 DNS に依存しない。
+
+### compatibility_flags の撤去は workerd で実測してから行った
+
+`nodejs_compat` / `nodejs_als` は SvelteKit の adapter-cloudflare が要求して
+いたもので、cljs の :esm bundle には要らない。**憶測で消さず、`wrangler dev
+--local`（実際の workerd）で flags 無しの設定のまま起動し、全 route を叩いて
+から撤去した**:
+
+    GET  /              200 text/html      GET  /nope       404
+    GET  /health        200（自分の route を名乗る）  POST /health     405
+    POST /xrpc/         400                OPTS /xrpc/x     204
+    POST /xrpc/com.x.y  502（到達不能）     GET /_app/meta   404
+    POST /xrpc/a/b      502（単一セグメントと同一）
+
+workerd が返したページに `class=\"dads-table\"` が 1、
+`--color-primitive-blue` が 45 —— CSS が実際に bundle へ焼かれて配信されて
+いることも同時に確認した。これは Node で import する smoke より強い証拠で
+ある（実際の Workers ランタイムで動かしているため）。
+
+## Consequences
+
+- appview の TypeScript は 0 本、正本言語（.cljs/.cljc）が 4 本になった。
+  移行前は appview の .ts が 3 本 + .svelte が 1 本、正本言語は 0 本。
+- `kotoba/` の TypeScript 5 本は**そのまま**。検証器が本数とパスを pin する。
+- 継承した 5 ファイル（4,370 バイト）は 1 バイトも変わっていない
+  （sha256 を検証器に固定）。wrangler.jsonc と docs/operator-quickstart.md
+  だけは**意図的に**変更した（前者は main の付け替え・assets の撤去・
+  APP_FRAMEWORK の更新・compatibility_flags の撤去、後者は移行前の状態を
+  記述していたため）。意図的な変更と勝手な変更を区別するため、byte 一致の
+  集合からは外して内容で検査する。
+- ホストは相変わらず NXDOMAIN である（a1rmr001 / air-mro / mcp /
+  dispatcher の 4 つとも）。移行はそれを直さない。deploy するか retire
+  するかは別の決定。
+"}]
