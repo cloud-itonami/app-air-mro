@@ -62,3 +62,22 @@
                              :vars [:SOME_UNLIKELY_KEY_7F3A]
                              :mcp-url "https://x.invalid"})]
       (is (str/includes? html "SOME_UNLIKELY_KEY_7F3A")))))
+
+(deftest relay-headers-forwards-what-it-received
+  (testing "移行前は host を削るだけで、authorization も上流へ届いていた"
+    (let [h (route/relay-headers [["Host" "x.example"]
+                                  ["Authorization" "Bearer t"]
+                                  ["Content-Length" "9"]
+                                  ["Content-Encoding" "gzip"]
+                                  ["X-Trace" "abc"]]
+                                 "com.a.b")]
+      (is (= "Bearer t" (get h "authorization"))
+          "authorization が落ちている —— preflight はこれを許可すると言っている")
+      (is (= "abc" (get h "x-trace"))
+          "呼び手が付けた header が落ちている")
+      (is (nil? (get h "host")) "host は宛先が変わるので渡さない")
+      (is (nil? (get h "content-length")) "body を詰め直すので元の長さは嘘になる")
+      (is (nil? (get h "content-encoding")) "body を詰め直すので元の encoding も嘘になる")
+      (is (= "application/json" (get h "content-type")))
+      (is (= "com.a.b" (get h "x-etzhayyim-xrpc-method")))
+      (is (= "cljs-worker" (get h "x-etzhayyim-bff"))))))
