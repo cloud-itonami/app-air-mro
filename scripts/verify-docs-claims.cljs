@@ -21,7 +21,7 @@
 (def root (or (first (remove #(str/starts-with? % "--") *command-line-args*)) "."))
 
 (def claims
-  {:tracked-files 25
+  {:tracked-files 26
    :inherited-bytes 4370          ; the 5 inherited files still carried byte-identical
    :svelte-artifacts 0            ; no .svelte / svelte.config / svelte/ file survives
    :sveltekit-compat-flags 0      ; nodejs_compat / nodejs_als were adapter-cloudflare's
