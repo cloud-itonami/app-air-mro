@@ -40,7 +40,7 @@ Cloudflare のアカウントは要らない（deploy だけが要る。§7）�
 ```bash
 git clone git@github.com:cloud-itonami/app-air-mro.git
 cd app-air-mro && REPO=$PWD
-npx --yes nbb scripts/verify-docs-claims.cljs .
+npx --yes kbb --backend sci scripts/verify-docs-claims.cljk .
 ```
 
 実際の出力（末尾）:
@@ -114,7 +114,7 @@ cat > "$W/run.cljs" <<'EOF'
 (require '[cljs.test :refer [run-tests]] 'air-mro.route-test)
 (run-tests 'air-mro.route-test)
 EOF
-npx --yes nbb --classpath "$CP" "$W/run.cljs"
+npx --yes kbb --backend sci --classpath "$CP" "$W/run.cljs"
 ```
 
 実際の出力:
@@ -155,9 +155,9 @@ cat > "$W/render.cljs" <<'EOF'
   (println "ok"))
 EOF
 DDS="$K/jp-go-digital-design-system" OUT="$W/mro-page.html" \
-  npx --yes nbb --classpath "$CP" "$W/render.cljs"
+  npx --yes kbb --backend sci --classpath "$CP" "$W/render.cljs"
 
-cd $K/design-quality && npx --yes nbb -m design-quality.cli score "$W/mro-page.html" --min 95
+cd $K/design-quality && npx --yes kbb --backend sci -m design-quality.cli score "$W/mro-page.html" --min 95
 ```
 
 実際の出力（末尾）:
@@ -194,7 +194,7 @@ CLI は gate FAIL で exit 1 を返すので、スクリプトの gate として
 ```bash
 cd "$REPO"
 node ~/github/com-junkawasaki/scripts/resource-guard.mjs run build -- \
-  npx --yes shadow-cljs release worker
+  npx --yes amu compile --target wasm32-browser worker
 ls -la dist/worker.js
 ```
 
@@ -241,7 +241,7 @@ IMPORT THREW: Cannot read properties of undefined (reading 'h')
 ここが deploy されるものに触る唯一の検査である。
 
 ```bash
-cd "$REPO" && npx --yes nbb scripts/smoke-worker.cljs dist/worker.js
+cd "$REPO" && npx --yes kbb --backend sci scripts/smoke-worker.cljk dist/worker.js
 ```
 
 実際の出力:

@@ -117,7 +117,7 @@ base）。色・寸法は --hig-* トークン契約のみ、app 固有 CSS は 
 - **air-mro.route-test**: 6 tests / 25 assertions、0 failures（nbb、ビルド不要）
 - **ページ描画 → design-quality**: 100.00 / 100（gate 95）。`--extra-axes` を
   付けた 12 軸でも 100.00
-- **bundle をビルドして実際に叩いた**: `shadow-cljs release worker` が
+- **bundle をビルドして実際に叩いた**: `amu compile --target wasm32-browser worker` が
   55 files / 12 compiled / 0 warnings で dist/worker.js（246,499 バイト、
   sha256 79339f33…）を出し、scripts/smoke-worker.cljs が 20 項目を確認
 - **scripts/verify-docs-claims.cljs**: 全 claim PASS、exit 0
