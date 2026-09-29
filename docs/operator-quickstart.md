@@ -24,7 +24,7 @@ Cloudflare のアカウントは要らない（deploy だけが要る。§7）�
    実行したコマンドは成功している。`-c core.fsmonitor=false` で黙る。
    `scripts/verify-docs-claims.cljs` は内部の `git ls-files` にこれを付けて
    あるので、合格した run の出力が失敗したように見えない。
-3. **高負荷ビルドは workspace 全体で同時 1 本**（superproject `CLAUDE.md` の
+3. **高負荷ビルドは workspace 全体で同時 1 本**（superproject `AGENTS.md` の
    resource governor）。§4 参照。
 4. **`/tmp` に固定名の作業ファイルを置かない。** この machine では並行する
    複数のセッションが同時に走る。実測 2026-08-18、この移行の最中に
