@@ -34,66 +34,114 @@
            (:route/doc r)])
         routes))
 
+(defn- page-routes
+  "静的版の route 表に載せてよいもの＝`:route/kind :page` だけ。
+
+  静的版には Worker が居ないので、`/health` も `/xrpc/:nsid` も**答えない**。
+  それを表に残せば、答えない経路を広告することになる —— docs/adr/0001 が
+  記録した『表示と実体のずれ』と同型の欠陥を、版を増やすことで作り直す。
+  route 表そのものは 1 つのまま、kind で絞って描く。"
+  [routes]
+  (filterv #(= :page (:route/kind %)) routes))
+
+(defn- static-edition-section
+  "静的版であることを述べる節。
+
+  静的版は IPFS に置く content-addressed な文書で、正規の所在は IPNS 名
+  （`ipns://k51…`）である。DNS の名前はそこへの別名にすぎない —— 名前が
+  変わっても内容のアドレスは変わらず、逆に内容が変われば別の文書になる。
+  中継・生存確認・実行時の設定はどれも Worker の実行時にしか存在しないので、
+  ここではそれらが**この版には無い**ことだけを書き、値は出さない。"
+  []
+  (dds/section
+   {:title "この版について"}
+   [:p {:class "mro-lede"}
+    "これは IPFS に公開した content-addressed な静的版である。正規の所在は "
+    "IPNS 名（" [:span {:class "mro-mono"} "ipns://k51…"] "）で、"
+    "DNS の名前はその別名にすぎない。"]
+   [:p {:class "mro-note"}
+    "XRPC の中継は Worker 版にだけある。この版はこのページ 1 枚だけで、"
+    "中継先も実行時の設定も持たない。"]))
+
 (defn body
   "opts:
    :routes    air-mro.route/routes（この Worker が実際に答えるもの）
    :vars      wrangler が渡した env のキー（**キー名だけ**。値は出さない）
    :mcp-url   XRPC の中継先（route/mcp-router-url の戻り値。**値そのものを出す**）
-   :built-at  bundle のビルド時刻（不明なら nil）"
-  [{:keys [routes vars mcp-url built-at]}]
-  (dds/container
-   (dds/section
-    {}
-    (dds/heading 1 "Air Maintenance MRO")
-    [:p {:class "mro-lede"}
-     "航空機の整備・修理・オーバーホール（MRO）の appview 公開面。"
-     "work order・部品トレース・耐空性確認といった業務そのものはここには無く、"
-     "この Worker は XRPC を MCP router へ中継する BFF である。"])
+   :built-at  bundle のビルド時刻（不明なら nil）
+   :static?   true なら IPFS に置く静的版として描く。Worker にしか無いもの
+              （`/health`・`/xrpc/:nsid`・中継先・env のキー）を出さない。
+              無ければ（Worker）これまでと 1 byte も変わらない"
+  [{:keys [routes vars mcp-url built-at static?]}]
+  ;; nil の子を container に渡さない。整形器は子の並びに nil が混ざると
+  ;; 折り返しを変えるので、静的版の節を `(when static? …)` のまま置くと
+  ;; Worker 版の HTML が変わる（実測: 整形が 1 段ずれた）。
+  (apply dds/container
+   (remove nil?
+    [(dds/section
+      {}
+      (dds/heading 1 "Air Maintenance MRO")
+      (if static?
+        [:p {:class "mro-lede"}
+         "航空機の整備・修理・オーバーホール（MRO）の appview 公開面。"
+         "work order・部品トレース・耐空性確認といった業務そのものはここには無い。"]
+        [:p {:class "mro-lede"}
+         "航空機の整備・修理・オーバーホール（MRO）の appview 公開面。"
+         "work order・部品トレース・耐空性確認といった業務そのものはここには無く、"
+         "この Worker は XRPC を MCP router へ中継する BFF である。"]))
 
-   (dds/section
-    {:title "この面が答えるもの"}
-    (dds/table {:caption "公開ルート"
-                :headers ["METHOD" "PATH" "何をするか"]
-                :rows (route-rows routes)})
-    [:p {:class "mro-note"}
-     "この表は Worker の route 表そのものから描いている。ページに焼いた値では"
-     "ないので、実際に答えるものと表示がずれない。"])
+     (when static? (static-edition-section))
 
-   (dds/section
-    {:title "実行時の設定"}
-    (if (seq vars)
-      [:div (into [:p] (interpose " "
-                                  (map (fn [k] (dds/chip-label (name k))) vars)))
-       [:p {:class "mro-note"}
-        "キー名のみ。**ただし下の中継先だけは値そのもの**（"
-        [:span {:class "mro-mono"} "AGENTGATEWAY_MCP_ROUTER_URL"]
-        "）—— どこへ中継するかは運用者が見る必要があるので意図的に出している。"
-        "それ以外の値は出さない。"]]
-      [:p {:class "mro-note"} "env が渡されていない（ローカル描画）。"])
-    [:p {:class "mro-note"} "XRPC の中継先: "
-     [:span {:class "mro-mono"} mcp-url]])
+     (dds/section
+      {:title "この面が答えるもの"}
+      (dds/table {:caption "公開ルート"
+                  :headers ["METHOD" "PATH" "何をするか"]
+                  :rows (route-rows (if static? (page-routes routes) routes))})
+      (if static?
+        [:p {:class "mro-note"}
+         "この表は Worker と同じ route 表から、ページだけを絞って描いている。"
+         "静的版が答えるのはこのページだけである。"]
+        [:p {:class "mro-note"}
+         "この表は Worker の route 表そのものから描いている。ページに焼いた値では"
+         "ないので、実際に答えるものと表示がずれない。"]))
 
-   (dds/section
-    {:title "この Worker は operation を 1 つも名指ししない"}
-    [:p {:class "mro-lede"}
-     "path に来た NSID をそのまま MCP router へ tools/call として転送するので、"
-     "この repo は「このアプリに何ができるか」を学ぶ場所ではない。実測: 移行前の "
-     [:span {:class "mro-mono"} "+server.ts"] " に "
-     [:span {:class "mro-mono"} "airMro"]
-     " という文字列は 1 度も現れなかった（grep -c → 0）。移行後も同じで、"
-     "operation の一覧は上流の MCP router 側にある。"]
-    [:p {:class "mro-note"}
-     "そのため " [:span {:class "mro-mono"} "APP_CAPABILITIES"]
-     " は強制ではなく文書である。値はここに焼かない（キー名だけ上に出る）。"])
+     (when-not static?
+       (dds/section
+        {:title "実行時の設定"}
+        (if (seq vars)
+          [:div (into [:p] (interpose " "
+                                      (map (fn [k] (dds/chip-label (name k))) vars)))
+           [:p {:class "mro-note"}
+            "キー名のみ。**ただし下の中継先だけは値そのもの**（"
+            [:span {:class "mro-mono"} "AGENTGATEWAY_MCP_ROUTER_URL"]
+            "）—— どこへ中継するかは運用者が見る必要があるので意図的に出している。"
+            "それ以外の値は出さない。"]]
+          [:p {:class "mro-note"} "env が渡されていない（ローカル描画）。"])
+        [:p {:class "mro-note"} "XRPC の中継先: "
+         [:span {:class "mro-mono"} mcp-url]]))
 
-   (dds/section
-    {:title "現在地"}
-    [:p {:class "mro-lede"}
-     "この appview は TypeScript/Svelte から ClojureScript へ移行済み。"
-     "deploy される bundle は、いま読んでいるソースからコンパイルされたもので"
-     "ある（docs/adr/0001）。"]
-    (when built-at
-      [:p {:class "mro-note"} "bundle build: " built-at]))))
+     (when-not static?
+       (dds/section
+        {:title "この Worker は operation を 1 つも名指ししない"}
+        [:p {:class "mro-lede"}
+         "path に来た NSID をそのまま MCP router へ tools/call として転送するので、"
+         "この repo は「このアプリに何ができるか」を学ぶ場所ではない。実測: 移行前の "
+         [:span {:class "mro-mono"} "+server.ts"] " に "
+         [:span {:class "mro-mono"} "airMro"]
+         " という文字列は 1 度も現れなかった（grep -c → 0）。移行後も同じで、"
+         "operation の一覧は上流の MCP router 側にある。"]
+        [:p {:class "mro-note"}
+         "そのため " [:span {:class "mro-mono"} "APP_CAPABILITIES"]
+         " は強制ではなく文書である。値はここに焼かない（キー名だけ上に出る）。"]))
+
+     (dds/section
+      {:title "現在地"}
+      [:p {:class "mro-lede"}
+       "この appview は TypeScript/Svelte から ClojureScript へ移行済み。"
+       "deploy される bundle は、いま読んでいるソースからコンパイルされたもので"
+       "ある（docs/adr/0001）。"]
+      (when built-at
+        [:p {:class "mro-note"} "bundle build: " built-at]))])))
 
 (defn render
   "完全な HTML 文書。`css` は呼び出し側が渡す(ライブラリは I/O を持たない)。"
