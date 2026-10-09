@@ -80,6 +80,8 @@ curate された公開サブセットではない —— 同じ形が 9 つの `
 
 ## Static edition (IPFS)
 
+Published name: `ipns://k51qzi5uqu5dmii8ylbm20m45c032a3h67wac6qj4jwwe5uwd8pq8mdd9qzpua` (recorded with the site CID in `kotoba.app.edn`). Public HTTPS entrance: `https://k51qzi5uqu5dmii8ylbm20m45c032a3h67wac6qj4jwwe5uwd8pq8mdd9qzpua.ipns.220-146-170-114.sslip.io/`.
+
 Worker の `GET /` はどの request にも同じ文書を返すので、それを**ビルド時に
 1 度描いた静的版**を IPFS に置く。正規の所在は IPNS 名（`ipns://k51…` /
 `{k51}.ipns` の gateway origin）で、DNS の名前はその別名である。**Worker 版は
