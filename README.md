@@ -78,16 +78,41 @@ curate された公開サブセットではない —— 同じ形が 9 つの `
 だけだが、**それは移行ではなく方針変更**であり、移行の commit に紛れ込ませる
 ものではない。絞りたいなら別の決定として記録する。
 
+## Static edition (IPFS)
+
+Worker の `GET /` はどの request にも同じ文書を返すので、それを**ビルド時に
+1 度描いた静的版**を IPFS に置く。正規の所在は IPNS 名（`ipns://k51…` /
+`{k51}.ipns` の gateway origin）で、DNS の名前はその別名である。**Worker 版は
+並行して deploy されたままで、その描画は 1 byte も変わらない**（`:static?` が
+無ければ従来の分岐をそのまま通る）。
+
+静的版には Worker が居ないので、ページは `/health`・`/xrpc/:nsid`・中継先・
+env のキーを**出さない**。route 表は `:route/kind :page` の行だけを描き、XRPC の
+中継は Worker 版にだけあると書く。`wrangler.jsonc` は**ビルド時に読み**、そこに宣言された var のキーが 1 つも出ていないことを確かめる。
+
+```bash
+K=~/github/com-junkawasaki/orgs/kotoba-lang
+kbb --backend sci \
+  --classpath "$K/jp-go-digital-design-system/src:$K/html/src:$K/css/src" \
+  scripts/render-static.kotoba .
+# => WROTE  dist/static/index.html   (dist/ は .gitignore 済み)
+```
+
+出力は決定的である（時刻を入れない）。2 回描いて sha256 が一致することを確認
+してから publish する。描いたものに `/xrpc`・`/health`・中継先・wrangler の
+var のキーが 1 つでも含まれていれば、書かずに exit 1 で止まる。
+
 ## いま在るもの
 
 | 面 | ファイル |
 |---|---|
 | 判断・描画・edge | `src/air_mro/{route.cljc, view.cljc, worker.cljs}` |
-| テスト | `test/air_mro/route_test.cljc`（6 tests / 25 assertions） |
+| テスト | `test/air_mro/route_test.cljc`（8 tests / 48 assertions） |
 | ビルド | `deps.edn` / `shadow-cljs.edn` |
 | Worker 設定 | `wrangler.jsonc` |
 | actor 記述子 | `kotodama.jsonld` |
 | 検証 | `scripts/{smoke-worker.cljs, verify-docs-claims.cljs}` |
+| 静的版のビルド | `scripts/render-static.kotoba` |
 | 由来・権利・識別 | `NOTICE` / `README.edn` / `migration.edn` / `MIGRATION-TODO.md` |
 | 文書 | `README.md` / `docs/operator-quickstart.md` / `docs/adr/0001-*.edn` |
 | **触っていない domain library** | `kotoba/`（TypeScript 5 本、下記） |

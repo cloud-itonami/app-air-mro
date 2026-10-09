@@ -21,7 +21,7 @@
 (def root (or (first (remove #(str/starts-with? % "--") *command-line-args*)) "."))
 
 (def claims
-  {:tracked-files 26
+  {:tracked-files 27
    :inherited-bytes 4370          ; the 5 inherited files still carried byte-identical
    :svelte-artifacts 0            ; no .svelte / svelte.config / svelte/ file survives
    :sveltekit-compat-flags 0      ; nodejs_compat / nodejs_als were adapter-cloudflare's
@@ -193,8 +193,8 @@
         (undet! "view.cljc or worker.cljs unreadable")
         (do
           (check! :page-renders-route-table true
-                  (and (str/includes? v "[{:keys [routes vars mcp-url built-at]}]")
-                       (str/includes? v "(route-rows routes)")
+                  (and (str/includes? v "[{:keys [routes vars mcp-url built-at static?]}]")
+                       (str/includes? v "(route-rows (if static? (page-routes routes) routes))")
                        (str/includes? w ":routes route/routes")))
           ;; the design system CSS is actually inlined into the bundle
           (check! :stylesheet-inlined-at-build true
